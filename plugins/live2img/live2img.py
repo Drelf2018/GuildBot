@@ -8,7 +8,9 @@ from .danmakus import ukamnads
 from vue2img import createApp, getCuttedBody, word2cloud
 
 
-async def make_image(uid: Union[int, str], last: int = 0, export = BytesIO()):
+async def make_image(uid: Union[int, str], last: int = 0, export = None):
+    export = BytesIO() if export is None else export
+
     uk = ukamnads()
     liveid = await uk.get_last_liveid(uid, last)
     live = await uk.get_live(liveid)

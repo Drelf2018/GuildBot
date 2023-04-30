@@ -1,15 +1,25 @@
 import asyncio
 import time
+from io import BytesIO
 from typing import BinaryIO, Union
 
+import httpx
 from aiowebsocket.converses import AioWebSocket
 from weibo_poster import BiliGo as plainBot
 from weibo_poster.biligo import DanmakuPost, Receive, RoomInfo
 
 from guildbot import get_driver, logger
-
 from plugins.live2img import make_image
+
 from .query import QUERY
+
+
+async def download(url: str):
+    "下载图片"
+
+    res = httpx.get(url)
+    data = BytesIO(res.content)
+    return data.getvalue()
 
 
 class BiliGo(plainBot):
@@ -53,11 +63,14 @@ async def send(room: Union[str, int], uid: Union[str, int], content: str = None,
 
 @bili.on("LIVE")
 async def live(roomInfo: RoomInfo):
+    "开播"
+
     tt = int(time.time())
     roomid = roomInfo.room_id
     if tt - ROOM_STATUS.get(roomid, 0) > 10800:
         ROOM_STATUS[roomid] = tt
-        await send(roomid, roomInfo.uid, "{name}开播了！\n{title}[CQ:image,file={cover}]".format_map(roomInfo.__dict__))
+        file_image = await download(roomInfo.cover)
+        await send(roomid, roomInfo.uid, "{name}开播了！\n{title}".format_map(roomInfo.__dict__), file_image)
 
 
 @bili.on("INTERACT_WORD", userFilter)
@@ -72,11 +85,13 @@ async def danmu(roomInfo: RoomInfo, danmaku: DanmakuPost):
     "接受到弹幕"
 
     msg = f'{danmaku.name} 在 {roomInfo.name} 的直播间说：{danmaku.text}'
+
+    file_image = None
     if len(danmaku.picUrls) > 0:
         image = danmaku.picUrls[0]
-        msg += f"[CQ:image,file={image}]"
+        file_image = await download(image)
 
-    await send(roomInfo.room_id, danmaku.uid, msg)
+    await send(roomInfo.room_id, danmaku.uid, msg, file_image=file_image)
 
 
 @bili.on("SEND_GIFT", userFilter)

@@ -1,14 +1,15 @@
 import os
 import sys
+from asyncio import Task
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import BinaryIO, List, Optional, Union, Coroutine
+from typing import BinaryIO, Coroutine, List, Optional, Union, Callable
 
 from bilibili_api.utils.AsyncEvent import AsyncEvent
 from botpy import Client, Intents, logger
 from botpy.types.message import Message
 
-from .util import remove_mentions, search_bili_userid, get_permission_level, get_bili_roomid
+from .util import get_bili_roomid, get_permission_level, remove_mentions, search_bili_userid
 
 
 @dataclass
@@ -116,11 +117,16 @@ class GuildBot(Client):
             break
         return self
     
-    def create_task(self, coro: Coroutine):
+    def create_task(self, coro: Coroutine, callback: Callable = None):
         "创建异步任务"
 
         # 参考 https://zhuanlan.zhihu.com/p/602955920
+        def inner(task: Task):
+            self.__tasks.remove(task)
+            if callback is not None:
+                result = task.result()
+                callback(result)
 
         task = self.loop.create_task(coro)
+        task.add_done_callback(inner)
         self.__tasks.add(task)
-        task.add_done_callback(lambda t: self.__tasks.remove(t))
