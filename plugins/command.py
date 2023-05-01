@@ -23,3 +23,14 @@ async def live(event: Event):
     except Exception as e:
         logger.error(f"{e} ({e.__traceback__.tb_lineno})")
         await event.reply(content=f"生成场报时错误")
+
+
+@bot.on("/here")
+async def here(event: Event):
+    await event.reply(f"该频道ID：{event.raw.guild_id}\n子频道ID：{event.raw.channel_id}")
+
+
+@bot.on("/guild")
+async def guild(event: Event):
+    guild_list = await bot.api.me_guilds(guild_id=0, limit=100, desc=True)
+    await event.reply("、".join([guild.get('name') for guild in guild_list]))

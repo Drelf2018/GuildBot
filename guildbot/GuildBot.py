@@ -2,14 +2,16 @@ import os
 import sys
 from asyncio import Task
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from importlib import import_module
-from typing import BinaryIO, Coroutine, List, Optional, Union, Callable
+from typing import Any, BinaryIO, Callable, Coroutine, List, Optional, Union
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bilibili_api.utils.AsyncEvent import AsyncEvent
 from botpy import Client, Intents, logger
 from botpy.types.message import Message
 
-from .util import get_bili_roomid, get_permission_level, remove_mentions, search_bili_userid
+from .util import *
 
 
 @dataclass
@@ -80,10 +82,28 @@ class Event:
 
 class GuildBot(Client):
     __tasks = set()  # 异步任务集
+    __scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")  # 定时任务框架
     __event_manager = AsyncEvent()
 
+    run_time = lambda _, seconds: datetime.now() + timedelta(seconds=seconds)
+
     def on(self, event_name: str):
+        "绑定事件监听"
+
         return self.__event_manager.on(event_name)
+
+    def add_job(self, fn, start: int = 0, interval: int = 5, args: list = None, kwargs: dict = None):
+        "新增任务"
+
+        self.__scheduler.add_job(fn, "interval", next_run_time=self.run_time(start), seconds=interval, args=args, kwargs=kwargs)
+        return fn
+
+    def job(self, start: int = 0, interval: int = 5, args: list = None, kwargs: dict = None):
+        "轮询装饰器"
+
+        def inner(fn):
+            return self.add_job(fn, start=start, interval=interval, args=args, kwargs=kwargs)
+        return inner
 
     async def on_at_message_create(self, message: Message):
         event = Event(bot=self, raw=message)
@@ -92,7 +112,7 @@ class GuildBot(Client):
     async def reply(self, channel_id: str, content: str = None, file_image: Union[bytes, BinaryIO, str] = None, msg_id: str = "10000"):
         return await self.api.post_message(
             channel_id=channel_id,
-            content=content,
+            content=str(content) if content is not None else None,
             file_image=file_image,
             msg_id=msg_id
         )
@@ -130,3 +150,20 @@ class GuildBot(Client):
         task = self.loop.create_task(coro)
         task.add_done_callback(inner)
         self.__tasks.add(task)
+
+    def run(self, *args: Any, **kwargs: Any) -> None:
+        """
+        机器人服务开始执行
+
+        注意:
+          这个函数必须是最后一个调用的函数，因为它是阻塞的。这意味着事件的注册或在此函数调用之后调用的任何内容在它返回之前不会执行。
+          如果想获取协程对象，可以使用`start`方法执行服务, 如:
+        ```
+        async with Client as c:
+            c.start()
+        ```
+        """
+
+        self.__scheduler._eventloop = self.loop
+        self.__scheduler.start()
+        return super().run(*args, **kwargs)

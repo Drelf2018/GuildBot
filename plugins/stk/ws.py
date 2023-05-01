@@ -1,14 +1,14 @@
 import asyncio
 import time
 from io import BytesIO
-from typing import BinaryIO, Union
+from typing import BinaryIO, Union, List
 
 import httpx
 from aiowebsocket.converses import AioWebSocket
 from weibo_poster import BiliGo as plainBot
 from weibo_poster.biligo import DanmakuPost, Receive, RoomInfo
 
-from guildbot import get_driver, logger
+from guildbot import get_driver, logger, ipcRenderer
 from plugins.live2img import make_image
 
 from .query import QUERY
@@ -27,6 +27,10 @@ class BiliGo(plainBot):
         """
         阻塞异步连接
         """
+
+        @ipcRenderer.on("room")
+        async def update(rooms: List[int]):
+            self.update(rooms)
 
         async with AioWebSocket(self.url + f"/ws?id={self.aid}") as aws:
             logger.info("Adapter 连接成功")

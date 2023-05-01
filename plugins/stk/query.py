@@ -6,11 +6,14 @@ from typing import Dict, List, Tuple, Union
 
 from yaml import FullLoader, dump, load
 
-from guildbot import logger
+from guildbot import logger, ipcRenderer
 
 
 class Query:
     def __init__(self, config: Dict[str, Dict[int, List[int]]]):
+        self.init(config)
+
+    def init(self, config: Dict[str, Dict[int, List[int]]]):
         self.__rooms = set()
         self.__users = set()
         self.__channels: Dict[str, List[str]] = dict()
@@ -18,11 +21,11 @@ class Query:
 
         for _, value in config.items():
             rooms = value.pop("roomid")
-            self.__rooms.symmetric_difference_update(rooms)
+            self.__rooms.update(rooms)
 
             for channel_id, users in value.items():
                 list(map(self.add_event_listener, product(rooms, users, [channel_id])))
-                self.__users.symmetric_difference_update(users)
+                self.__users.update(users)
 
         logger.info(f"channels 占用了 {getsizeof(self.__channels) // 1024} KB 内存")
 
@@ -98,6 +101,8 @@ class Query:
     def save(self):
         "保存配置文件"
 
+        self.init(self.__config)
+        ipcRenderer.dispatch("room", self.rooms())
         with open(CONFIGPATH, "w", encoding="utf-8") as fp:
             dump(self.__config, fp, allow_unicode=True)
 
