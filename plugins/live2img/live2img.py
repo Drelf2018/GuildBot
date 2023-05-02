@@ -1,10 +1,18 @@
+import os
 import time
 from io import BytesIO
+from random import choice
 from typing import Union
 
 from PIL import Image
 
-from .danmakus import ukamnads
+try:
+    from .danmakus import ukamnads
+    from .util import get_face
+except:
+    from danmakus import ukamnads
+    from util import get_face
+
 from vue2img import createApp, getCuttedBody, word2cloud
 
 
@@ -30,7 +38,14 @@ async def make_image(uid: Union[int, str], last: int = 0, export = None):
     bg = Image.new("L", (850, 300), "black")
     wc = word2cloud("/".join(dms), bg, "resource/font/HarmonyOS_Sans_SC_Regular.ttf")
 
-    nanami = getCuttedBody(Image.open("resource/nana7mi.png"))
+    path = f"resource/Tachie/{uid}"
+    nanami = None
+    face = None
+    for _, _, files in os.walk(path):
+        nanami = getCuttedBody(Image.open(os.path.join(path, choice(files))))
+        break
+    else:
+        face = await get_face(uid)
 
     t2s = lambda tt: time.strftime('%m/%d %H:%M', time.localtime(tt // 1000))
 
@@ -55,9 +70,16 @@ async def make_image(uid: Union[int, str], last: int = 0, export = None):
         "dm": wc,
         "incomeLine": income,
         "nanami": nanami,
+        "face": face
     })
 
-    createApp(1000).mount(path="resource/Live.vue", data=detail).export(export)
+    canvas = createApp(1000).mount(path="resource/Live.vue", data=detail).export().canvas
+    
+    if face is not None:
+        w, h = canvas.size
+        canvas = canvas.crop((0, 48, w, h))
+
+    canvas.save(export, format="png")
     return export
 
 

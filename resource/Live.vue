@@ -1,6 +1,8 @@
 <template>
   <div class="outer">
     <div class="container">
+      <img v-if="nanami" class="nanami" :src="nanami" />
+      <img v-else class="face" :src="face" />
       <h1>{{ uName }} 直播记录</h1>
       <p class="title">标题：{{ title }}</p>
       <p class="time">时间：{{ time }}</p>
@@ -37,7 +39,6 @@
       <p class="subtitle">弹幕词云</p>
       <img style="margin: 10px 0 12px" :src="dm" />
       <span class="source">*数据来源：api.ukamnads.icu</span>
-      <img class="nanami" :src="nanami" />
     </div>
   </div>
 </template>
@@ -53,7 +54,7 @@
 
 .container {
   width: calc(100% - 7em);
-  margin: 100px 2em 2em;
+  margin: 80px 2em 2em;
   padding: 1.5em 1.5em 17px;
   background-color: white;
   border-radius: 1em;
@@ -118,7 +119,14 @@ h1 {
 .nanami {
   position: absolute;
   top: 10px;
-  left: 745px;
-  width: 250px;
+  left: calc(990px - 100%);
+  height: 400px;
+}
+
+.face {
+  position: absolute;
+  top: calc(80px + 1em);
+  left: calc(850px - 3em);
+  width: 150px;
 }
 </style>
