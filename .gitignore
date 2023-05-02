@@ -152,3 +152,8 @@ cython_debug/
 #.idea/
 
 plugins/stk/config.yml
+plugins/weibo/emoji
+plugins/weibo/content.yml
+plugins/weibo/emoji.json
+resource/Tachie
+test.png
