@@ -3,13 +3,20 @@ import sys
 from asyncio import Task
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 from importlib import import_module
-from typing import Any, BinaryIO, Callable, Coroutine, List, Optional, Union
+from typing import (Any, BinaryIO, Callable, Coroutine, Dict, List, Optional,
+                    Sequence, Type, Union)
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bilibili_api.utils.AsyncEvent import AsyncEvent
 from botpy import Client, Intents, logger
 from botpy.types.message import Message
+from fastapi import FastAPI
+from fastapi.encoders import DictIntStrAny, SetIntStr
+from fastapi.params import Depends
+from starlette.responses import Response
+from starlette.routing import BaseRoute
 
 from .util import *
 
@@ -81,11 +88,18 @@ class Event:
 
 
 class GuildBot(Client):
+    __app = FastAPI()
     __tasks = set()  # 异步任务集
     __scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")  # 定时任务框架
     __event_manager = AsyncEvent()
 
     run_time = lambda _, seconds: datetime.now() + timedelta(seconds=seconds)
+
+    def get(self, path: str, *args, **kwarge):
+        return self.__app.get(path, *args, **kwarge)
+    
+    def post(self, path: str, *args, **kwarge):
+        return self.__app.post(path, *args, **kwarge)
 
     def on(self, event_name: str):
         "绑定事件监听"
@@ -117,12 +131,15 @@ class GuildBot(Client):
             msg_id=msg_id
         )
     
-    def load_plugins(self, folder: str):
+    def load_plugins(self, folder: str, exclude: List[str] = None):
         "加载插件"
 
         def load(name: str):
+            if exclude is not None and name in exclude:
+                return
             try:
                 import_module(name)
+                logger.info(f"{name} 加载成功")
             except Exception as e:
                 logger.error(f"{name} 加载错误：{e}")
 
@@ -166,4 +183,9 @@ class GuildBot(Client):
 
         self.__scheduler._eventloop = self.loop
         self.__scheduler.start()
-        return super().run(*args, **kwargs)
+
+        config = uvicorn.Config(self.__app, host=kwargs.get("host", "0.0.0.0"), port=kwargs.get("port", 5760), log_level="info")
+        server = UvicornServer(config=config)
+
+        with server.run_in_thread():
+            return super().run(*args, **kwargs)

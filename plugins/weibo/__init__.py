@@ -1,5 +1,6 @@
 import time
 from io import BytesIO
+from typing import Union
 
 import httpx
 from weibo_poster import Post, get_content, parse_text
@@ -39,24 +40,33 @@ async def put(post: Post, channel_id: str = "9638022"):
         logger.error(e)
     
 
-@bot.job(3, 4.5)
-async def weibo():
-    logger.debug("更新微博")
-    res = httpx.get("https://api.nana7mi.link/post")
-    data = res.json()
-    if data["code"] == 0:
-        for pdata in data["data"]:
-            post = Post.parse(pdata)
-            if CONTENT.get(post.mid, "") != post.text:
-                await put(post)
-
-
-@bot.on("/weibo")
-async def send(event: Event):
+async def generator(channel_id: Union[str, int]):
     tt = int(time.time()) - 86400
     res = httpx.get(f"https://api.nana7mi.link/post?beginTs={tt}")
     data = res.json()
     if data["code"] == 0:
         pdata = data["data"][-1]
         post = Post.parse(pdata)
-        await put(post, channel_id=event.raw.channel_id)
+        await put(post, channel_id=channel_id)
+
+
+# @bot.job(3, 4.5)
+# async def weibo():
+#     logger.debug("更新微博")
+#     res = httpx.get("https://api.nana7mi.link/post")
+#     data = res.json()
+#     if data["code"] == 0:
+#         for pdata in data["data"]:
+#             post = Post.parse(pdata)
+#             if CONTENT.get(post.mid, "") != post.text:
+#                 await put(post)
+                
+                
+@bot.on("/weibo")
+async def send(event: Event):
+    await generator(event.raw.channel_id)
+
+
+@bot.get("/weibo")
+def send(channel: Union[str, int]):
+    bot.create_task(generator(channel))

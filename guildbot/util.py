@@ -1,8 +1,34 @@
+import contextlib
+import threading
+import time
 from typing import List, Optional
 
+import uvicorn
 from bilibili_api import search, user
 from botpy.types.message import Message
 from botpy.types.user import Member
+
+
+class UvicornServer(uvicorn.Server):
+    """不阻塞启动 fastapi
+    
+    参考：https://www.cnblogs.com/selfcs/p/17240902.html
+    """
+
+    def install_signal_handlers(self):
+        pass
+
+    @contextlib.contextmanager
+    def run_in_thread(self):
+        thread = threading.Thread(target=self.run)
+        thread.start()
+        try:
+            while not self.started:
+                time.sleep(1e-3)
+            yield
+        finally:
+            self.should_exit = True
+            thread.join()
 
 
 async def search_bili_userid(keyword: str):
