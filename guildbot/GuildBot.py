@@ -3,20 +3,14 @@ import sys
 from asyncio import Task
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
 from importlib import import_module
-from typing import (Any, BinaryIO, Callable, Coroutine, Dict, List, Optional,
-                    Sequence, Type, Union)
+from typing import Any, BinaryIO, Callable, Coroutine, List, Optional, Union
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bilibili_api.utils.AsyncEvent import AsyncEvent
 from botpy import Client, Intents, logger
 from botpy.types.message import Message
 from fastapi import FastAPI
-from fastapi.encoders import DictIntStrAny, SetIntStr
-from fastapi.params import Depends
-from starlette.responses import Response
-from starlette.routing import BaseRoute
 
 from .util import *
 
@@ -48,6 +42,8 @@ class Event:
         return get_permission_level(self.raw) > 0
 
     async def reply(self, content: str = None, file_image: Union[bytes, BinaryIO, str] = None, channel_id: str = None, msg_id: str = None):
+        "回复消息"
+        
         return await self.bot.reply(
             channel_id=channel_id if channel_id else self.raw.channel_id,
             content=content,
@@ -90,15 +86,18 @@ class Event:
 class GuildBot(Client):
     __app = FastAPI()
     __tasks = set()  # 异步任务集
+    __jobs = dict()  # 定时任务集
     __scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")  # 定时任务框架
     __event_manager = AsyncEvent()
 
-    run_time = lambda _, seconds: datetime.now() + timedelta(seconds=seconds)
-
     def get(self, path: str, *args, **kwarge):
+        "接收 web GET 请求"
+
         return self.__app.get(path, *args, **kwarge)
     
     def post(self, path: str, *args, **kwarge):
+        "接收 web POST 请求"
+
         return self.__app.post(path, *args, **kwarge)
 
     def on(self, event_name: str):
@@ -106,24 +105,43 @@ class GuildBot(Client):
 
         return self.__event_manager.on(event_name)
 
-    def add_job(self, fn, start: int = 0, interval: int = 5, args: list = None, kwargs: dict = None):
+    @staticmethod
+    def delay(seconds: float):
+        "以当前时间为基准延后"
+
+        return datetime.now() + timedelta(seconds=seconds)
+
+    def add_job(self, fn: Callable, start: int = 0, interval: float = 5.0, name: str = None,  args: list = None, kwargs: dict = None):
         "新增任务"
 
-        self.__scheduler.add_job(fn, "interval", next_run_time=self.run_time(start), seconds=interval, args=args, kwargs=kwargs)
+        job = self.__scheduler.add_job(fn, "interval", next_run_time=self.delay(start), seconds=interval, name=name, args=args, kwargs=kwargs)
+        if name is not None:
+            self.__jobs[name] = job.id
         return fn
 
-    def job(self, start: int = 0, interval: int = 5, args: list = None, kwargs: dict = None):
+    def job(self, start: int = 0, interval: float = 5.0, name: str = None, args: list = None, kwargs: dict = None):
         "轮询装饰器"
 
         def inner(fn):
-            return self.add_job(fn, start=start, interval=interval, args=args, kwargs=kwargs)
+            return self.add_job(fn, start=start, interval=interval, name=name, args=args, kwargs=kwargs)
         return inner
 
+    def cancel(self, name: str):
+        "取消定时任务"
+
+        job_id = self.__jobs.get(name, None)
+        if job_id is not None:
+            self.__scheduler.remove_job(job_id)
+
     async def on_at_message_create(self, message: Message):
+        "派发消息"
+
         event = Event(bot=self, raw=message)
         self.__event_manager.dispatch(event.cmd, event)
 
     async def reply(self, channel_id: str, content: str = None, file_image: Union[bytes, BinaryIO, str] = None, msg_id: str = "10000"):
+        "回复消息"
+        
         return await self.api.post_message(
             channel_id=channel_id,
             content=str(content) if content is not None else None,
@@ -167,6 +185,7 @@ class GuildBot(Client):
         task = self.loop.create_task(coro)
         task.add_done_callback(inner)
         self.__tasks.add(task)
+        return task
 
     def run(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -184,8 +203,13 @@ class GuildBot(Client):
         self.__scheduler._eventloop = self.loop
         self.__scheduler.start()
 
-        config = uvicorn.Config(self.__app, host=kwargs.get("host", "0.0.0.0"), port=kwargs.get("port", 5760), log_level="info")
+        config = uvicorn.Config(
+            self.__app,
+            host=kwargs.get("host", "0.0.0.0"),
+            port=kwargs.get("port", 5760),
+            log_level="info"
+        )
         server = UvicornServer(config=config)
 
         with server.run_in_thread():
-            return super().run(*args, **kwargs)
+            super().run(*args, **kwargs)

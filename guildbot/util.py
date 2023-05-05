@@ -10,7 +10,8 @@ from botpy.types.user import Member
 
 
 class UvicornServer(uvicorn.Server):
-    """不阻塞启动 fastapi
+    """
+    不阻塞启动 fastapi
     
     参考：https://www.cnblogs.com/selfcs/p/17240902.html
     """
