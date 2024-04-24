@@ -1,0 +1,5 @@
+bilibili_api_python==16.1.0
+qq-botpy==1.2.0
+apscheduler==3.10.4
+fastapi==0.96.1
+uvicorn==0.22.0

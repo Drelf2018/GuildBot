@@ -1,11 +1,21 @@
 from bilibili_api.utils.AsyncEvent import AsyncEvent
 
-from .GuildBot import Event, GuildBot, Intents, logger
-from .promise import Promise
-from .util import *
+from .guildbot import Event, GuildBot, logger
 
-ipcRenderer = AsyncEvent()  # InterPlugins Communication 插件内通信
-__THE_ONLY_ONE_BOT = GuildBot(intents=Intents(public_guild_messages=True), bot_log=None)
+__all__ = [
+    "Event",
+    "GuildBot",
+    "logger",
+    "ipcEvent",
+]
+
+ipcEvent = AsyncEvent()  # InterPlugins Communication 插件间通信
+__THE_ONLY_ONE_BOT = None
 
 def get_driver():
+    return __THE_ONLY_ONE_BOT
+
+def set_driver(*args, **kwargs):
+    global __THE_ONLY_ONE_BOT
+    __THE_ONLY_ONE_BOT = GuildBot(*args, **kwargs)
     return __THE_ONLY_ONE_BOT
